@@ -8,7 +8,8 @@ const commands = [];
 const core = {
   status: async () => ({ activeWan: 'wan_a', mode: 'manual', lastVerifiedAt: '2026-10-30T00:00:00Z',
     links: [{ id: 'wan_a', label: 'ISP A', healthy: true }, { id: 'wan_b', label: 'ISP B', healthy: true }] }),
-  command: async (body) => { commands.push(body); return { command: { commandId: '12345678-1234' } }; }
+  command: async (body) => { commands.push(body); return { command: { commandId: '12345678-1234' } }; },
+  airtimeReward: async (body) => ({ reward: { status: 'queued', ...body } })
 };
 
 test('USSD menu and switch use the shared Core', async () => {
@@ -19,6 +20,8 @@ test('USSD menu and switch use the shared Core', async () => {
   assert.equal(commands[0].targetWan, 'wan_b');
   assert.equal(commands[0].idempotencyKey, 'session-1:2*2');
   assert.match(await handleUssd({ ...fields, phoneNumber: '+255700000000' }, config, core), /^END Namba hii haijaruhusiwa/);
+  assert.match(await handleUssd({ ...fields, text: '4' }, config, core), /TZS 1000/);
+  assert.match(await handleUssd({ ...fields, text: '4*1' }, config, core), /^END Ombi la airtime/);
 });
 
 test('USSD callback returns plain CON/END text and rejects wrong secret', async () => {

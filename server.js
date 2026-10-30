@@ -28,7 +28,8 @@ export function createCoreClient(config) {
   }
   return {
     status: () => call(`/v1/devices/${encodeURIComponent(config.deviceId)}/status`),
-    command: (body) => call('/v1/commands', { method: 'POST', body: JSON.stringify(body) })
+    command: (body) => call('/v1/commands', { method: 'POST', body: JSON.stringify(body) }),
+    airtimeReward: (body) => call('/v1/airtime/reward', { method: 'POST', body: JSON.stringify(body) })
   };
 }
 
@@ -39,7 +40,7 @@ export async function handleUssd(fields, config, core) {
   if (!phone || phone !== config.adminPhone) return 'END Namba hii haijaruhusiwa kutumia PieBox.';
   if (!sessionId || sessionId.length > 180 || text.length > 180) return 'END Ombi si sahihi.';
   try {
-    if (text === '') return 'CON PieBox\n1. Hali ya mtandao\n2. Chagua ISP\n3. Auto mode';
+    if (text === '') return 'CON PieBox\n1. Hali ya mtandao\n2. Chagua ISP\n3. Auto mode\n4. Airtime reward';
     if (text === '1') {
       const state = await core.status();
       return `END WAN: ${state.activeWan || 'hakuna'}\nMode: ${state.mode}\nUpdated: ${state.lastVerifiedAt || 'bado'}`;
@@ -62,6 +63,14 @@ export async function handleUssd(fields, config, core) {
       const result = await core.command({ deviceId: config.deviceId, actor: phone, channel: 'ussd',
         action: text === '3*1' ? 'auto_on' : 'auto_off', idempotencyKey: `${sessionId}:${text}` });
       return `END Ombi ${result.command.commandId.slice(0, 8)} limepokelewa. Utapata SMS ya matokeo.`;
+    }
+    if (text === '4') return `CON Airtime reward TZS 1000 kwa ${phone}\n1. Thibitisha\n2. Ghairi`;
+    if (text === '4*2') return 'END Ombi la airtime limeghairiwa.';
+    if (text === '4*1') {
+      const result = await core.airtimeReward({ phone, sessionId });
+      return result.reward.status === 'failed'
+        ? 'END Ombi la airtime limeshindwa. Tazama SMS kwa maelezo.'
+        : 'END Ombi la airtime TZS 1000 limepokelewa. Utapata SMS ya hali yake.';
     }
     return 'END Chaguo si sahihi.';
   } catch (error) {

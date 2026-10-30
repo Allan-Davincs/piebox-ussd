@@ -39,10 +39,10 @@ export async function handleUssd(fields, config, core) {
   if (!phone || phone !== config.adminPhone) return 'END Namba hii haijaruhusiwa kutumia PieBox.';
   if (!sessionId || sessionId.length > 180 || text.length > 180) return 'END Ombi si sahihi.';
   try {
-    if (text === '') return `CON PieBox${config.demoMode ? ' DEMO' : ''}\n1. Hali ya mtandao\n2. Chagua ISP\n3. Auto mode`;
+    if (text === '') return 'CON PieBox\n1. Hali ya mtandao\n2. Chagua ISP\n3. Auto mode';
     if (text === '1') {
       const state = await core.status();
-      return `END ${state.simulated ? 'DEMO ' : ''}WAN: ${state.activeWan || 'hakuna'}\nMode: ${state.mode}\nUpdated: ${state.lastVerifiedAt || 'bado'}`;
+      return `END WAN: ${state.activeWan || 'hakuna'}\nMode: ${state.mode}\nUpdated: ${state.lastVerifiedAt || 'bado'}`;
     }
     if (text === '2') {
       const state = await core.status();

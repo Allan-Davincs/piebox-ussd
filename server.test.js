@@ -15,12 +15,21 @@ const core = {
 test('USSD menu and switch use the shared Core', async () => {
   const fields = { phoneNumber: '0759637644', sessionId: 'session-1', text: '' };
   assert.match(await handleUssd(fields, config, core), /^CON PieBox/);
-  assert.match(await handleUssd({ ...fields, text: '2' }, config, core), /ISP B/);
-  assert.match(await handleUssd({ ...fields, text: '2*2' }, config, core), /^END Ombi/);
+  assert.match(await handleUssd({ ...fields, text: '1' }, config, core), /Mtandao: ISP A/);
+  assert.match(await handleUssd({ ...fields, text: '2' }, config, core), /ISP B \(ready\)/);
+  assert.match(await handleUssd({ ...fields, text: '2*2' }, config, core), /^END Ombi la kuhamia ISP B/);
   assert.equal(commands[0].targetWan, 'wan_b');
   assert.equal(commands[0].idempotencyKey, 'session-1:2*2');
-  assert.match(await handleUssd({ ...fields, phoneNumber: '+255700000000' }, config, core), /^END Namba hii haijaruhusiwa/);
-  assert.match(await handleUssd({ ...fields, text: '4' }, config, core), /TZS 1000/);
+  const guest = { ...fields, phoneNumber: '+255700000000' };
+  assert.match(await handleUssd(guest, config, core), /^CON PieBox/);
+  assert.match(await handleUssd({ ...guest, text: '1' }, config, core), /Mtandao: ISP A/);
+  assert.match(await handleUssd({ ...guest, text: '2' }, config, core), /ISP B/);
+  assert.match(await handleUssd({ ...guest, text: '2*2' }, config, core), /^END Kubadili provider kunahitaji/);
+  assert.equal(commands.length, 1);
+  assert.match(await handleUssd({ ...fields, text: '2*0' }, config, core), /^CON PieBox/);
+  assert.match(await handleUssd({ ...fields, text: '2*0*1' }, config, core), /Mtandao: ISP A/);
+  assert.match(await handleUssd({ ...fields, text: '0' }, config, core), /^END Asante/);
+  assert.match(await handleUssd({ ...fields, text: '4' }, config, core), /TZS 1,000/);
   assert.match(await handleUssd({ ...fields, text: '4*1' }, config, core), /^END Ombi la airtime/);
 });
 

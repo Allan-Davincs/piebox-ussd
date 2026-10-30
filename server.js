@@ -37,40 +37,52 @@ export async function handleUssd(fields, config, core) {
   const phone = normalizePhone(fields.phoneNumber);
   const sessionId = String(fields.sessionId || '');
   const text = String(fields.text || '').trim();
-  if (!phone || phone !== config.adminPhone) return 'END Namba hii haijaruhusiwa kutumia PieBox.';
-  if (!sessionId || sessionId.length > 180 || text.length > 180) return 'END Ombi si sahihi.';
+  if (!phone || !/^[A-Za-z0-9_-]{4,120}$/.test(sessionId) || text.length > 180) return 'END Ombi si sahihi.';
+  if (text && !/^\d+(?:\*\d+)*$/.test(text)) return 'END Chaguo si sahihi.';
+  const admin = phone === config.adminPhone;
+  const steps = text ? text.split('*') : [];
+  if (text === '0') return 'END Asante kwa kutumia PieBox.';
+  const backIndex = steps.lastIndexOf('0');
+  const path = steps.slice(backIndex + 1).join('*');
+  const menu = () => `CON PieBox\n1. Hali ya mtandao\n2. Providers${admin ? '\n3. Auto routing\n4. Airtime' : ''}\n0. Toka`;
   try {
-    if (text === '') return 'CON PieBox\n1. Hali ya mtandao\n2. Chagua ISP\n3. Auto mode\n4. Airtime reward';
-    if (text === '1') {
+    if (path === '') return menu();
+    if (path === '1') {
       const state = await core.status();
-      return `END WAN: ${state.activeWan || 'hakuna'}\nMode: ${state.mode}\nUpdated: ${state.lastVerifiedAt || 'bado'}`;
+      const active = state.links.find(link => link.id === state.activeWan)?.label || 'Hakuna';
+      const ready = state.links.filter(link => link.healthy !== false).length;
+      return `CON Hali ya PieBox\nMtandao: ${active}\nMode: ${state.mode === 'auto' ? 'AUTO' : 'MANUAL'}\nProviders: ${ready}/${state.links.length} tayari\n0. Rudi`;
     }
-    if (text === '2') {
+    if (path === '2') {
       const state = await core.status();
-      return `CON Chagua ISP\n${state.links.map((link, i) => `${i + 1}. ${link.label} (${link.healthy === false ? 'down' : 'ready'})`).join('\n')}`;
+      return `CON Providers\n${state.links.map((link, i) => `${i + 1}. ${link.label} (${link.id === state.activeWan ? 'active' : link.healthy === false ? 'down' : 'ready'})`).join('\n')}\n0. Rudi`;
     }
-    if (text.startsWith('2*')) {
+    if (/^2\*\d+$/.test(path)) {
+      if (!admin) return 'END Kubadili provider kunahitaji namba ya admin.';
       const state = await core.status();
-      const choice = Number(text.slice(2));
+      const choice = Number(path.slice(2));
       if (!Number.isInteger(choice) || choice < 1 || choice > state.links.length) return 'END Chaguo si sahihi.';
       const link = state.links[choice - 1];
+      if (link.id === state.activeWan) return `END ${link.label} tayari ndio mtandao active.`;
+      if (link.healthy === false) return `END ${link.label} haipatikani sasa. Chagua provider mwingine.`;
       const result = await core.command({ deviceId: config.deviceId, actor: phone, channel: 'ussd',
-        action: 'switch_wan', targetWan: link.id, idempotencyKey: `${sessionId}:${text}` });
-      return `END Ombi ${result.command.commandId.slice(0, 8)} limepokelewa. Utapata SMS ya matokeo.`;
+        action: 'switch_wan', targetWan: link.id, idempotencyKey: `${sessionId}:${path}` });
+      return `END Ombi la kuhamia ${link.label} limepokelewa. Utapata SMS ya matokeo.`;
     }
-    if (text === '3') return 'CON Auto mode\n1. Washa\n2. Zima';
-    if (text === '3*1' || text === '3*2') {
+    if (path === '3') return admin ? 'CON Auto routing\n1. Washa\n2. Zima\n0. Rudi' : 'END Auto routing inahitaji namba ya admin.';
+    if (path === '3*1' || path === '3*2') {
+      if (!admin) return 'END Auto routing inahitaji namba ya admin.';
       const result = await core.command({ deviceId: config.deviceId, actor: phone, channel: 'ussd',
-        action: text === '3*1' ? 'auto_on' : 'auto_off', idempotencyKey: `${sessionId}:${text}` });
-      return `END Ombi ${result.command.commandId.slice(0, 8)} limepokelewa. Utapata SMS ya matokeo.`;
+        action: path === '3*1' ? 'auto_on' : 'auto_off', idempotencyKey: `${sessionId}:${path}` });
+      return `END Ombi la ${path === '3*1' ? 'kuwasha' : 'kuzima'} Auto routing limepokelewa. Utapata SMS ya matokeo.`;
     }
-    if (text === '4') return `CON Airtime reward TZS 1000 kwa ${phone}\n1. Thibitisha\n2. Ghairi`;
-    if (text === '4*2') return 'END Ombi la airtime limeghairiwa.';
-    if (text === '4*1') {
+    if (path === '4') return admin ? `CON Airtime TZS 1,000\nKwa: ${phone}\n1. Thibitisha\n0. Rudi` : 'END Airtime inahitaji namba ya admin.';
+    if (path === '4*1') {
+      if (!admin) return 'END Airtime inahitaji namba ya admin.';
       const result = await core.airtimeReward({ phone, sessionId });
       return result.reward.status === 'failed'
         ? 'END Ombi la airtime limeshindwa. Tazama SMS kwa maelezo.'
-        : 'END Ombi la airtime TZS 1000 limepokelewa. Utapata SMS ya hali yake.';
+        : 'END Ombi la airtime TZS 1,000 limepokelewa. Utapata SMS ya hali yake.';
     }
     return 'END Chaguo si sahihi.';
   } catch (error) {
